@@ -1,0 +1,69 @@
+version: '3.8'
+
+services:
+  file-postgres:
+    image: postgres:16
+    container_name: file-postgres
+    restart: always
+    environment:
+      POSTGRES_USER: ${FILE_POSTGRES_USER}
+      POSTGRES_PASSWORD: ${FILE_POSTGRES_PASSWORD}
+      POSTGRES_DB: ${FILE_POSTGRES_DB}
+    ports:
+      - "127.0.0.1:${FILE_POSTGRES_PORT}:5432"
+    volumes:
+      - file-postgres-data:/var/lib/postgresql/data
+    networks:
+      - file-network
+
+  file-redis:
+    image: redis:7
+    container_name: file-redis
+    restart: always
+    command: redis-server --requirepass ${FILE_REDIS_PASSWORD}
+    ports:
+      - "127.0.0.1:${FILE_REDIS_PORT}:6379"
+    volumes:
+      - file-redis-data:/data
+    networks:
+      - file-network
+
+  notification-postgres:
+    image: postgres:16
+    container_name: notification-postgres
+    restart: always
+    environment:
+      POSTGRES_USER: ${NOTIFICATION_POSTGRES_USER}
+      POSTGRES_PASSWORD: ${NOTIFICATION_POSTGRES_PASSWORD}
+      POSTGRES_DB: ${NOTIFICATION_POSTGRES_DB}
+    ports:
+      - "127.0.0.1:${NOTIFICATION_POSTGRES_PORT}:5432"
+    volumes:
+      - notification-postgres-data:/var/lib/postgresql/data
+    networks:
+      - notification-network
+
+  notification-redis:
+    image: redis:7
+    container_name: notification-redis
+    restart: always
+    command: redis-server --requirepass ${NOTIFICATION_REDIS_PASSWORD}
+    ports:
+      - "127.0.0.1:${NOTIFICATION_REDIS_PORT}:6379"
+    volumes:
+      - notification-redis-data:/data
+    networks:
+      - notification-network
+
+volumes:
+  file-postgres-data:
+  file-redis-data:
+  notification-postgres-data:
+  notification-redis-data:
+
+networks:
+  file-network:
+    name: file-network
+
+  notification-network:
+    name: notification-network
