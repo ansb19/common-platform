@@ -1,14 +1,14 @@
 import { Module } from '@nestjs/common';
 import { FileServiceController } from './file-service.controller';
-import { FileServiceService } from './services/file.service';
+import { FileServiceService } from './service/file.service';
 import { ConfigModule } from '@nestjs/config';
 import { DatabaseModule } from '@common-platform/database';
 import { DATABASE_SERVICE } from 'libs/common/const/database.const';
 import { TypeOrmModule } from '@nestjs/typeorm';
-import { File } from './entities/file.entity';
-import { FileContext } from './entities/file-context.entity';
-import { FileLog } from './entities/file-log.entity';
-import { FileReference } from './entities/file-reference.entity';
+import { File } from './entity/file.entity';
+import { FileContext } from './entity/file-context.entity';
+import { FileLog } from './entity/file-log.entity';
+import { FileReference } from './entity/file-reference.entity';
 
 
 @Module({

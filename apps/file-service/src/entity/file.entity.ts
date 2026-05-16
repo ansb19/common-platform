@@ -17,7 +17,8 @@ import { DATABASE_SCHEMA } from 'libs/common/const/database.const';
 import { FileContext } from './file-context.entity';
 import { FileReference } from './file-reference.entity';
 import { FileStorageType } from '../enum/file.enum';
-import { PROJECT_NAME } from 'libs/common/enum/project.enum';
+import { ProjectName } from 'libs/common/enum/project.enum';
+
 
 @Index('uq_files_project_bucket_key', ['project', 'bucket', 'key'], {
     unique: true,
@@ -48,7 +49,7 @@ export class File {
         length: 50,
         comment: '프로젝트명',
     })
-    project!: PROJECT_NAME;
+    project!: ProjectName;
 
     /**
      * 스토리지 타입
