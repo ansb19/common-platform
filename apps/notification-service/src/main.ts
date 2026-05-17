@@ -2,7 +2,12 @@ import { ClassSerializerInterceptor, ValidationPipe } from '@nestjs/common';
 import { NestFactory, Reflector } from '@nestjs/core';
 import { DocumentBuilder, SwaggerModule } from '@nestjs/swagger';
 import 'dotenv/config';
-import { NotificationServiceModule } from './notification-service.module';
+import { NotificationServiceModule } from './app.module';
+import { TrimPipe } from 'libs/common/pipe/trim.pipe';
+import { LoggingInterceptor } from 'libs/common/interceptor/logging.interceptor';
+import { ResponseInterceptor } from 'libs/common/interceptor/response.interceptor';
+import { ThrottlerExceptionFilter } from 'libs/common/filter/throttler-exception.filter';
+import { HttpExceptionFilter } from 'libs/common/filter/http-exception.filter';
 
 
 async function bootstrap() {
@@ -46,6 +51,20 @@ async function bootstrap() {
   SwaggerModule.setup('api-docs', app, swaggerDocument);
 
   const port = Number(process.env.NOTIFICATION_SERVICE_PORT ?? 3001);
+
+  app.useGlobalInterceptors(
+    new LoggingInterceptor(),
+    new ResponseInterceptor(app.get(Reflector)),
+  );
+
+  app.useGlobalPipes(
+    new TrimPipe(),
+  );
+
+  app.useGlobalFilters(
+    new HttpExceptionFilter(),
+    new ThrottlerExceptionFilter(),
+  );
 
   await app.listen(port, '0.0.0.0');
 
