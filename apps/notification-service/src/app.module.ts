@@ -6,6 +6,7 @@ import { NotificationModule } from './notification/notification.module';
 
 @Module({
   imports: [
+    
     ConfigModule.forRoot({
       isGlobal: true,
     }),

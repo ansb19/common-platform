@@ -1,5 +1,4 @@
 import { Module } from '@nestjs/common';
-import { FileServiceController } from './file-service.controller';
 import { FileServiceService } from './service/file.service';
 import { ConfigModule } from '@nestjs/config';
 import { DatabaseModule } from '@common-platform/database';
@@ -25,7 +24,6 @@ import { FileReference } from './entity/file-reference.entity';
     DatabaseModule.forRoot(DATABASE_SERVICE.FILE),
   ],
 
-  controllers: [FileServiceController],
   providers: [FileServiceService],
 })
 export class FileServiceModule { }

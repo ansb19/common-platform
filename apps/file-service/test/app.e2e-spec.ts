@@ -1,7 +1,7 @@
 import { Test, TestingModule } from '@nestjs/testing';
 import { INestApplication } from '@nestjs/common';
 import * as request from 'supertest';
-import { FileServiceModule } from './../src/file-service.module';
+import { FileServiceModule } from '../src/app.module';
 
 describe('FileServiceController (e2e)', () => {
   let app: INestApplication;

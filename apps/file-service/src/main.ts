@@ -1,5 +1,5 @@
 import { NestFactory } from '@nestjs/core';
-import { FileServiceModule } from './file-service.module';
+import { FileServiceModule } from './app.module';
 
 async function bootstrap() {
   const app = await NestFactory.create(FileServiceModule);
