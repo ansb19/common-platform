@@ -1,0 +1,7 @@
+export enum NotificationLogStatus {
+    PENDING = 'PENDING',
+    PROCESSING = 'PROCESSING',
+    COMPLETED = 'COMPLETED',
+    PARTIAL_FAILED = 'PARTIAL_FAILED',
+    FAILED = 'FAILED',
+}
