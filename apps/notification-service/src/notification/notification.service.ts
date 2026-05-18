@@ -10,6 +10,15 @@ import { NotificationChannel } from './enum/notification-channel.enum';
 
 import type { SendNotificationParams } from './interface/send-notification-params.interface';
 
+
+// - 알림 발송 요청 처리
+// - templateCode가 있으면 템플릿 조회
+// - 템플릿 변수 검증
+// - 템플릿 변수 치환
+// - notification_logs 생성
+// - 수신자별 notification_delivery_logs 생성
+// - 채널별 Queue 적재
+// - 발송 요청 상태 관리
 @Injectable()
 export class NotificationService {
     constructor(
