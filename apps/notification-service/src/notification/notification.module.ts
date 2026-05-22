@@ -2,7 +2,7 @@ import { Module } from '@nestjs/common';
 import { SmsModule } from '../sms/sms.module';
 import { EmailModule } from '../email/email.module';
 import { TypeOrmModule } from '@nestjs/typeorm';
-import { NotificationTemplate } from './entity/notification-template.entity';
+import { NotificationTemplate } from '../template/entity/notification-template.entity';
 import { NotificationLog } from './entity/notification-log.entity';
 import { NotificationDeviceToken } from './entity/notification-device-token.entity';
 import { NotificationDeliveryLog } from './entity/notification-delivery-log.entity';

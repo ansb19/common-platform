@@ -6,6 +6,7 @@ import {
     PrimaryColumn,
 } from 'typeorm';
 
+import { CommonLength } from 'libs/common/const/common-length.const';
 import { DATABASE_SCHEMA } from 'libs/common/const/database.const';
 
 import { NotificationChannel } from '../enum/notification-channel.enum';
@@ -14,6 +15,10 @@ import { NotificationDeliveryStatus } from '../enum/notification-delivery-status
 /**
  * ! PostgreSQL 파티셔닝 설정
  * ! 실제 파티션 생성은 migration raw SQL에서 진행
+ *
+ * created_at 기준 월별 파티셔닝을 전제로 한다.
+ * PostgreSQL 파티션 테이블에서는 PK/UNIQUE 제약에 파티션 키가 포함되어야 하므로
+ * idx + created_at 복합 PrimaryColumn 구조를 유지한다.
  */
 @Index('idx_notification_delivery_logs_created_at', ['createdAt'])
 @Index('idx_notification_delivery_logs_log_idx_created_at', [
@@ -73,7 +78,7 @@ export class NotificationDeliveryLog {
     @Column({
         name: 'project_name',
         type: 'varchar',
-        length: 50,
+        length: CommonLength.CODE,
         comment: '프로젝트 이름',
     })
     projectName!: string;
@@ -88,7 +93,7 @@ export class NotificationDeliveryLog {
     @Column({
         name: 'receiver_ref_type',
         type: 'varchar',
-        length: 50,
+        length: CommonLength.CODE,
         comment: '수신자 타입',
     })
     receiverRefType!: string;
@@ -113,7 +118,7 @@ export class NotificationDeliveryLog {
     @Column({
         name: 'receiver_contact',
         type: 'varchar',
-        length: 500,
+        length: CommonLength.URL,
         nullable: true,
         comment: '수신 주소',
     })
@@ -124,7 +129,7 @@ export class NotificationDeliveryLog {
      */
     @Column({
         type: 'varchar',
-        length: 30,
+        length: CommonLength.CODE,
         comment: '알림 채널',
     })
     channel!: NotificationChannel;
@@ -134,7 +139,7 @@ export class NotificationDeliveryLog {
      */
     @Column({
         type: 'varchar',
-        length: 30,
+        length: CommonLength.CODE,
         default: NotificationDeliveryStatus.PENDING,
         comment: '발송 상태',
     })
@@ -149,7 +154,7 @@ export class NotificationDeliveryLog {
     @Column({
         name: 'provider_message_id',
         type: 'varchar',
-        length: 255,
+        length: CommonLength.CODE,
         nullable: true,
         comment: '외부 provider 메시지 ID',
     })
@@ -161,7 +166,7 @@ export class NotificationDeliveryLog {
     @Column({
         name: 'failure_code',
         type: 'varchar',
-        length: 100,
+        length: CommonLength.CODE,
         nullable: true,
         comment: '실패 코드',
     })

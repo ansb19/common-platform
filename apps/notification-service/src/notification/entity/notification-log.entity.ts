@@ -6,7 +6,9 @@ import {
     PrimaryColumn,
 } from 'typeorm';
 
+import { CommonLength } from 'libs/common/const/common-length.const';
 import { DATABASE_SCHEMA } from 'libs/common/const/database.const';
+import { DefaultValue } from 'libs/common/const/default-value.const';
 
 import { NotificationChannel } from '../enum/notification-channel.enum';
 import { NotificationLogStatus } from '../enum/notification-log-status.enum';
@@ -14,6 +16,10 @@ import { NotificationLogStatus } from '../enum/notification-log-status.enum';
 /**
  * ! PostgreSQL 파티셔닝 설정
  * ! 실제 파티션 생성은 migration raw SQL에서 진행
+ *
+ * created_at 기준 월별 파티셔닝을 전제로 한다.
+ * PostgreSQL 파티션 테이블에서는 PK/UNIQUE 제약에 파티션 키가 포함되어야 하므로
+ * idx + created_at 복합 PrimaryColumn 구조를 유지한다.
  */
 @Index('idx_notification_logs_created_at', ['createdAt'])
 @Index('idx_notification_logs_project_name_created_at', [
@@ -50,7 +56,7 @@ export class NotificationLog {
     @Column({
         name: 'project_name',
         type: 'varchar',
-        length: 50,
+        length: CommonLength.CODE,
         comment: '프로젝트 이름',
     })
     projectName!: string;
@@ -77,7 +83,7 @@ export class NotificationLog {
     @Column({
         name: 'sender_ref_type',
         type: 'varchar',
-        length: 50,
+        length: CommonLength.CODE,
         nullable: true,
         comment: '발신 주체 타입',
     })
@@ -99,7 +105,7 @@ export class NotificationLog {
      */
     @Column({
         type: 'varchar',
-        length: 30,
+        length: CommonLength.CODE,
         comment: '알림 채널',
     })
     channel!: NotificationChannel;
@@ -109,7 +115,7 @@ export class NotificationLog {
      */
     @Column({
         type: 'varchar',
-        length: 255,
+        length: CommonLength.TITLE,
         nullable: true,
         comment: '알림 제목',
     })
@@ -167,7 +173,8 @@ export class NotificationLog {
      */
     @Column({
         name: 'link_url',
-        type: 'text',
+        type: 'varchar',
+        length: CommonLength.URL,
         nullable: true,
         comment: '링크 URL',
     })
@@ -179,7 +186,7 @@ export class NotificationLog {
      */
     @Column({
         type: 'integer',
-        default: 100,
+        default: DefaultValue.SORT_ORDER,
         comment: '우선순위',
     })
     priority!: number;
@@ -200,7 +207,7 @@ export class NotificationLog {
      */
     @Column({
         type: 'varchar',
-        length: 30,
+        length: CommonLength.CODE,
         default: NotificationLogStatus.PENDING,
         comment: '처리 상태',
     })

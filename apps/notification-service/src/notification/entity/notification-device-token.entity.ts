@@ -8,6 +8,7 @@ import {
     UpdateDateColumn,
 } from 'typeorm';
 
+import { CommonLength } from 'libs/common/const/common-length.const';
 import { DATABASE_SCHEMA } from 'libs/common/const/database.const';
 
 import { NotificationDevicePlatform } from '../enum/notification-device-platform.enum';
@@ -16,13 +17,22 @@ import { NotificationDevicePlatform } from '../enum/notification-device-platform
     'projectName',
     'userRefIdx',
 ])
-@Index('idx_notification_device_tokens_token', ['token'], {
-    unique: true,
-})
 @Index('idx_notification_device_tokens_project_active', [
     'projectName',
     'isActive',
 ])
+@Index('idx_notification_device_tokens_token_active', ['token'], {
+    unique: true,
+    where: 'deleted_at IS NULL',
+})
+@Index('idx_notification_device_tokens_project_user_device_active', [
+    'projectName',
+    'userRefIdx',
+    'deviceId',
+], {
+    unique: true,
+    where: 'deleted_at IS NULL AND device_id IS NOT NULL',
+})
 @Entity({
     schema: DATABASE_SCHEMA.NOTIFICATION,
     name: 'notification_device_tokens',
@@ -44,7 +54,7 @@ export class NotificationDeviceToken {
     @Column({
         name: 'project_name',
         type: 'varchar',
-        length: 50,
+        length: CommonLength.CODE,
         comment: '프로젝트 이름',
     })
     projectName!: string;
@@ -66,7 +76,7 @@ export class NotificationDeviceToken {
     @Column({
         name: 'device_id',
         type: 'varchar',
-        length: 255,
+        length: CommonLength.CODE,
         nullable: true,
         comment: '디바이스 ID',
     })
@@ -90,7 +100,7 @@ export class NotificationDeviceToken {
      */
     @Column({
         type: 'varchar',
-        length: 30,
+        length: CommonLength.CODE,
         comment: '플랫폼',
     })
     platform!: NotificationDevicePlatform;
@@ -123,7 +133,7 @@ export class NotificationDeviceToken {
     @Column({
         name: 'inactive_reason',
         type: 'varchar',
-        length: 255,
+        length: CommonLength.DESCRIPTION,
         nullable: true,
         comment: '비활성화 사유',
     })

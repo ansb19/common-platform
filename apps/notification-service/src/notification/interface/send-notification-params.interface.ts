@@ -1,6 +1,8 @@
 import { NotificationChannel } from '../enum/notification-channel.enum';
 
 export interface SendNotificationParams {
+    projectName: string;
+    
     channels: NotificationChannel[];
 
     requestId?: string;

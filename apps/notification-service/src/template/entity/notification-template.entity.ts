@@ -7,9 +7,10 @@ import {
     UpdateDateColumn,
 } from 'typeorm';
 
+import { CommonLength } from 'libs/common/const/common-length.const';
 import { DATABASE_SCHEMA } from 'libs/common/const/database.const';
 
-import { NotificationChannel } from '../enum/notification-channel.enum';
+import { NotificationChannel } from '../../notification/enum/notification-channel.enum';
 
 @Index('idx_notification_templates_project_code_channel', [
     'projectName',
@@ -46,7 +47,7 @@ export class NotificationTemplate {
     @Column({
         name: 'project_name',
         type: 'varchar',
-        length: 50,
+        length: CommonLength.CODE,
         comment: '프로젝트 이름',
     })
     projectName!: string;
@@ -60,7 +61,7 @@ export class NotificationTemplate {
      */
     @Column({
         type: 'varchar',
-        length: 100,
+        length: CommonLength.CODE,
         comment: '템플릿 코드',
     })
     code!: string;
@@ -74,7 +75,7 @@ export class NotificationTemplate {
      */
     @Column({
         type: 'varchar',
-        length: 30,
+        length: CommonLength.CODE,
         comment: '알림 채널',
     })
     channel!: NotificationChannel;
@@ -85,7 +86,7 @@ export class NotificationTemplate {
      */
     @Column({
         type: 'varchar',
-        length: 255,
+        length: CommonLength.TITLE,
         nullable: true,
         comment: '템플릿 제목',
     })
