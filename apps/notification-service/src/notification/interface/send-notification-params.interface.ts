@@ -1,43 +1,55 @@
+// apps/notification-service/src/notification/interface/send-notification-params.interface.ts
+
 import { NotificationChannel } from '../enum/notification-channel.enum';
+
+export interface SendEmailNotificationParams {
+    to: string[];
+    subject?: string;
+    html?: string;
+    text?: string;
+    cc?: string[];
+    bcc?: string[];
+}
+
+export interface SendSmsNotificationParams {
+    to: string[];
+    from: string;
+    text?: string;
+}
+
+export interface SendPushNotificationParams {
+    deviceTokens: string[];
+    title?: string;
+    body?: string;
+    data?: Record<string, string>;
+}
 
 export interface SendNotificationParams {
     projectName: string;
-    
+    requestId?: string | null;
+
     channels: NotificationChannel[];
 
-    requestId?: string;
-
     templateCode?: string;
-    variables?: Record<
-        string,
-        string | number | boolean | null | undefined
-    >;
+    templateIdx?: number | null;
+    variables?: Record<string, string | number | boolean | null | undefined>;
 
-    // EMAIL
-    email?: {
-        to: string[];
-        subject: string;
-        html?: string;
-        text?: string;
+    senderRefType?: string | null;
+    senderRefIdx?: number | null;
 
-        cc?: string[];
-        bcc?: string[];
-    };
+    receiverRefType?: string | null;
+    receiverRefIdxs?: number[] | null;
 
-    // SMS
-    sms?: {
-        to: string[];
-        from: string;
-        text: string;
-    };
+    title?: string | null;
+    content?: string | null;
 
-    // PUSH
-    push?: {
-        deviceTokens: string[];
+    fileUuids?: string[] | null;
+    linkUrl?: string | null;
+    priority?: number;
+    isSystem?: boolean;
+    metadata?: Record<string, unknown> | null;
 
-        title: string;
-        body: string;
-
-        data?: Record<string, string>;
-    };
+    email?: SendEmailNotificationParams;
+    sms?: SendSmsNotificationParams;
+    push?: SendPushNotificationParams;
 }

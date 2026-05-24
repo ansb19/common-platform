@@ -1,7 +1,6 @@
-import {
-    BadRequestException,
-    Injectable,
-} from '@nestjs/common';
+// apps/notification-service/src/notification/notification.service.ts
+
+import { BadRequestException, Injectable } from '@nestjs/common';
 
 import { NotificationChannel } from './enum/notification-channel.enum';
 import { NotificationDeliveryStatus } from './enum/notification-delivery-status.enum';
@@ -9,305 +8,373 @@ import { NotificationLogStatus } from './enum/notification-log-status.enum';
 
 import type { SendNotificationParams } from './interface/send-notification-params.interface';
 
-import { NotificationLogService } from '../notification-log/notification-log.service';
-import { NotificationTemplateService } from '../notification-template/notification-template.service';
 import { NotificationQueueProducer } from '../queue/notification-queue.producer';
+import { NotificationLogService } from '../log/notification-log.service';
+import { NotificationTemplateService } from '../template/notification-template.service';
+import { NotificationLog } from '../log/entity/notification-log.entity';
+import { CreateNotificationDeliveryLogParams } from '../log/notification-log.interface';
 
-// - 알림 발송 요청 처리
-// - templateCode가 있으면 템플릿 조회
-// - 템플릿 변수 검증
-// - 템플릿 변수 치환
-// - notification_logs 생성
-// - 수신자별 notification_delivery_logs 생성
-// - 채널별 Queue 적재
-// - 발송 요청 상태 관리
+type ResolvedNotificationParams = SendNotificationParams & {
+  channels: [NotificationChannel];
+  title: string | null;
+  content: string;
+};
+
 @Injectable()
 export class NotificationService {
-    constructor(
-        private readonly notificationTemplateService: NotificationTemplateService,
-        private readonly notificationLogService: NotificationLogService,
-        private readonly notificationQueueProducer: NotificationQueueProducer,
-    ) { }
+  constructor(
+    private readonly notificationTemplateService: NotificationTemplateService,
+    private readonly notificationLogService: NotificationLogService,
+    private readonly notificationQueueProducer: NotificationQueueProducer,
+  ) {}
 
-    async sendNotification(
-        params: SendNotificationParams,
-    ): Promise<void> {
-        this.validateBaseParams(params);
+  /**
+   * 알림 발송 요청 처리
+   *
+   * - 다중 채널 요청은 채널별 요청으로 분리한다.
+   * - notification_logs는 채널당 1개 생성한다.
+   * - notification_delivery_logs는 수신자당 1개 생성한다.
+   * - Queue Job은 deliveryLog 단위로 적재한다.
+   */
+  async sendNotification(params: SendNotificationParams): Promise<void> {
+    this.validateBaseParams(params);
 
-        const resolvedParams = params.templateCode
-            ? await this.resolveTemplateParams(params)
-            : params;
+    const resolvedParamsList = params.templateCode
+      ? await this.resolveTemplateParams(params)
+      : this.resolveDirectParams(params);
 
-        this.validateChannelParams(resolvedParams);
+    for (const resolvedParams of resolvedParamsList) {
+      this.validateResolvedParams(resolvedParams);
 
-        const notificationLog =
-            await this.notificationLogService.createNotificationLog({
-                requestId: resolvedParams.requestId ?? null,
-                channels: resolvedParams.channels,
-                templateCode: resolvedParams.templateCode ?? null,
-                status: NotificationLogStatus.PENDING,
-            });
+      const channel = resolvedParams.channels[0];
 
-        const deliveryLogs =
-            await this.notificationLogService.createDeliveryLogs(
-                this.createDeliveryLogParams(
-                    notificationLog.idx,
-                    resolvedParams,
-                ),
-            );
-
-        await this.notificationQueueProducer.addSendNotificationJobs({
-            notificationLogIdx: notificationLog.idx,
-            deliveryLogIdxs: deliveryLogs.map((log) => log.idx),
-            channels: resolvedParams.channels,
+      const notificationLog =
+        await this.notificationLogService.createNotificationLog({
+          projectName: resolvedParams.projectName,
+          requestId: resolvedParams.requestId ?? null,
+          templateIdx: resolvedParams.templateIdx ?? null,
+          senderRefType: resolvedParams.senderRefType ?? null,
+          senderRefIdx: resolvedParams.senderRefIdx ?? null,
+          channel,
+          title: resolvedParams.title,
+          content: resolvedParams.content,
+          templateVariables: resolvedParams.variables ?? null,
+          receiverRefIdxs: resolvedParams.receiverRefIdxs ?? null,
+          fileUuids: resolvedParams.fileUuids ?? null,
+          linkUrl: resolvedParams.linkUrl ?? null,
+          priority: resolvedParams.priority,
+          isSystem: resolvedParams.isSystem ?? false,
+          status: NotificationLogStatus.PENDING,
+          targetCount: this.getTargetCount(resolvedParams),
+          metadata: this.createNotificationMetadata(resolvedParams),
         });
 
-        await this.notificationLogService.updateNotificationLogStatus(
-            notificationLog.idx,
-            NotificationLogStatus.PROCESSING,
-        );
+      const deliveryLogs = await this.notificationLogService.createDeliveryLogs(
+        this.createDeliveryLogParams(notificationLog, resolvedParams),
+      );
+
+      await this.notificationQueueProducer.addSendNotificationJobs({
+        notificationLogIdx: notificationLog.idx,
+        deliveryLogs: deliveryLogs.map((deliveryLog) => ({
+          idx: deliveryLog.idx,
+          channel: deliveryLog.channel,
+          priority: resolvedParams.priority,
+        })),
+      });
+
+      await this.notificationLogService.updateNotificationLogStatus(
+        notificationLog.idx,
+        NotificationLogStatus.PROCESSING,
+      );
+    }
+  }
+
+  private validateBaseParams(params: SendNotificationParams): void {
+    if (!params.projectName) {
+      throw new BadRequestException('프로젝트 이름이 필요합니다.');
     }
 
-    private validateBaseParams(
-        params: SendNotificationParams,
-    ): void {
-        if (!params.channels.length) {
-            throw new BadRequestException('알림 채널이 필요합니다.');
-        }
-
-        const uniqueChannels = new Set(params.channels);
-
-        if (uniqueChannels.size !== params.channels.length) {
-            throw new BadRequestException('알림 채널이 중복되었습니다.');
-        }
-
-        if (!params.templateCode && !params.email && !params.sms && !params.push) {
-            throw new BadRequestException(
-                '템플릿 코드 또는 채널별 발송 데이터가 필요합니다.',
-            );
-        }
+    if (!params.channels.length) {
+      throw new BadRequestException('알림 채널이 필요합니다.');
     }
 
-    private validateChannelParams(
-        params: SendNotificationParams,
-    ): void {
-        for (const channel of params.channels) {
-            switch (channel) {
-                case NotificationChannel.EMAIL:
-                    this.validateEmailParams(params);
-                    break;
+    const uniqueChannels = new Set(params.channels);
 
-                case NotificationChannel.SMS:
-                    this.validateSmsParams(params);
-                    break;
-
-                case NotificationChannel.PUSH:
-                    this.validatePushParams(params);
-                    break;
-
-                default:
-                    throw new BadRequestException(
-                        '지원하지 않는 알림 채널입니다.',
-                    );
-            }
-        }
+    if (uniqueChannels.size !== params.channels.length) {
+      throw new BadRequestException('알림 채널이 중복되었습니다.');
     }
 
-    private validateEmailParams(
-        params: SendNotificationParams,
-    ): void {
-        if (!params.email) {
-            throw new BadRequestException(
-                'EMAIL 데이터가 필요합니다.',
-            );
-        }
+    if (!params.templateCode && !params.email && !params.sms && !params.push) {
+      throw new BadRequestException(
+        '템플릿 코드 또는 채널별 발송 데이터가 필요합니다.',
+      );
+    }
+  }
 
-        if (!params.email.to.length) {
-            throw new BadRequestException(
-                '이메일 수신자가 필요합니다.',
-            );
-        }
+  private validateResolvedParams(params: ResolvedNotificationParams): void {
+    const channel = params.channels[0];
 
-        if (!params.email.subject) {
-            throw new BadRequestException(
-                '이메일 제목이 필요합니다.',
-            );
-        }
+    switch (channel) {
+      case NotificationChannel.EMAIL:
+        this.validateEmailParams(params);
+        break;
 
-        if (!params.email.html && !params.email.text) {
-            throw new BadRequestException(
-                '이메일 본문이 필요합니다.',
-            );
-        }
+      case NotificationChannel.SMS:
+        this.validateSmsParams(params);
+        break;
+
+      case NotificationChannel.PUSH:
+        this.validatePushParams(params);
+        break;
+
+      default:
+        throw new BadRequestException('지원하지 않는 알림 채널입니다.');
+    }
+  }
+
+  private validateEmailParams(params: ResolvedNotificationParams): void {
+    if (!params.email) {
+      throw new BadRequestException('EMAIL 데이터가 필요합니다.');
     }
 
-    private validateSmsParams(
-        params: SendNotificationParams,
-    ): void {
-        if (!params.sms) {
-            throw new BadRequestException(
-                'SMS 데이터가 필요합니다.',
-            );
-        }
-
-        if (!params.sms.to.length) {
-            throw new BadRequestException(
-                '문자 수신자가 필요합니다.',
-            );
-        }
-
-        if (!params.sms.from) {
-            throw new BadRequestException(
-                '문자 발신번호가 필요합니다.',
-            );
-        }
-
-        if (!params.sms.text) {
-            throw new BadRequestException(
-                '문자 내용이 필요합니다.',
-            );
-        }
+    if (!params.email.to.length) {
+      throw new BadRequestException('이메일 수신자가 필요합니다.');
     }
 
-    private validatePushParams(
-        params: SendNotificationParams,
-    ): void {
-        if (!params.push) {
-            throw new BadRequestException(
-                'PUSH 데이터가 필요합니다.',
-            );
-        }
-
-        if (!params.push.deviceTokens.length) {
-            throw new BadRequestException(
-                '푸시 수신 토큰이 필요합니다.',
-            );
-        }
-
-        if (!params.push.title) {
-            throw new BadRequestException(
-                '푸시 제목이 필요합니다.',
-            );
-        }
-
-        if (!params.push.body) {
-            throw new BadRequestException(
-                '푸시 내용이 필요합니다.',
-            );
-        }
+    if (!params.title) {
+      throw new BadRequestException('이메일 제목이 필요합니다.');
     }
 
-    private async resolveTemplateParams(
-        params: SendNotificationParams,
-    ): Promise<SendNotificationParams> {
+    if (!params.content) {
+      throw new BadRequestException('이메일 본문이 필요합니다.');
+    }
+  }
+
+  private validateSmsParams(params: ResolvedNotificationParams): void {
+    if (!params.sms) {
+      throw new BadRequestException('SMS 데이터가 필요합니다.');
+    }
+
+    if (!params.sms.to.length) {
+      throw new BadRequestException('문자 수신자가 필요합니다.');
+    }
+
+    if (!params.sms.from) {
+      throw new BadRequestException('문자 발신번호가 필요합니다.');
+    }
+
+    if (!params.content) {
+      throw new BadRequestException('문자 내용이 필요합니다.');
+    }
+  }
+
+  private validatePushParams(params: ResolvedNotificationParams): void {
+    if (!params.push) {
+      throw new BadRequestException('PUSH 데이터가 필요합니다.');
+    }
+
+    if (!params.push.deviceTokens.length) {
+      throw new BadRequestException('푸시 수신 토큰이 필요합니다.');
+    }
+
+    if (!params.title) {
+      throw new BadRequestException('푸시 제목이 필요합니다.');
+    }
+
+    if (!params.content) {
+      throw new BadRequestException('푸시 내용이 필요합니다.');
+    }
+  }
+
+  /**
+   * 템플릿 기반 요청을 채널별 resolved params로 변환한다.
+   */
+  private async resolveTemplateParams(
+    params: SendNotificationParams,
+  ): Promise<ResolvedNotificationParams[]> {
+    if (!params.templateCode) {
+      throw new BadRequestException('템플릿 코드가 필요합니다.');
+    }
+
+    return Promise.all(
+      params.channels.map(async (channel) => {
         const template =
-            await this.notificationTemplateService.getTemplateByCode(
-                params.templateCode!,
-            );
+          await this.notificationTemplateService.getTemplateByCode({
+            projectName: params.projectName,
+            code: params.templateCode!,
+            channel,
+          });
 
         this.notificationTemplateService.validateTemplateVariables({
-            template,
-            variables: params.variables ?? {},
+          template,
+          variables: params.variables ?? {},
         });
 
         const title = this.notificationTemplateService.replaceVariables(
-            template.title,
-            params.variables ?? {},
+          template.title ?? '',
+          params.variables ?? {},
         );
 
         const content = this.notificationTemplateService.replaceVariables(
-            template.content,
-            params.variables ?? {},
+          template.content,
+          params.variables ?? {},
         );
 
         return {
-            ...params,
-
-            email: params.email
-                ? {
-                    ...params.email,
-                    subject: params.email.subject || title,
-                    html: params.email.html
-                        ? this.notificationTemplateService.replaceVariables(
-                            params.email.html,
-                            params.variables ?? {},
-                        )
-                        : content,
-                    text: params.email.text
-                        ? this.notificationTemplateService.replaceVariables(
-                            params.email.text,
-                            params.variables ?? {},
-                        )
-                        : content,
-                }
-                : undefined,
-
-            sms: params.sms
-                ? {
-                    ...params.sms,
-                    text: params.sms.text
-                        ? this.notificationTemplateService.replaceVariables(
-                            params.sms.text,
-                            params.variables ?? {},
-                        )
-                        : content,
-                }
-                : undefined,
-
-            push: params.push
-                ? {
-                    ...params.push,
-                    title: params.push.title || title,
-                    body: params.push.body || content,
-                }
-                : undefined,
+          ...params,
+          channels: [channel],
+          templateIdx: template.idx,
+          title,
+          content,
         };
+      }),
+    );
+  }
+
+  /**
+   * 직접 발송 요청을 채널별 resolved params로 변환한다.
+   */
+  private resolveDirectParams(
+    params: SendNotificationParams,
+  ): ResolvedNotificationParams[] {
+    return params.channels.map((channel) => {
+      switch (channel) {
+        case NotificationChannel.EMAIL:
+          return {
+            ...params,
+            channels: [channel],
+            title: params.email?.subject ?? params.title ?? null,
+            content:
+              params.email?.html ?? params.email?.text ?? params.content ?? '',
+          };
+
+        case NotificationChannel.SMS:
+          return {
+            ...params,
+            channels: [channel],
+            title: params.title ?? null,
+            content: params.sms?.text ?? params.content ?? '',
+          };
+
+        case NotificationChannel.PUSH:
+          return {
+            ...params,
+            channels: [channel],
+            title: params.push?.title ?? params.title ?? null,
+            content: params.push?.body ?? params.content ?? '',
+          };
+
+        default:
+          throw new BadRequestException('지원하지 않는 알림 채널입니다.');
+      }
+    });
+  }
+
+  /**
+   * 수신자별 delivery log 생성 파라미터를 만든다.
+   */
+  private createDeliveryLogParams(
+    notificationLog: NotificationLog,
+    params: ResolvedNotificationParams,
+  ): CreateNotificationDeliveryLogParams[] {
+    const channel = params.channels[0];
+
+    if (channel === NotificationChannel.EMAIL) {
+      return (params.email?.to ?? []).map((to, index) => ({
+        notificationLogIdx: notificationLog.idx,
+        notificationLogCreatedAt: notificationLog.createdAt,
+        projectName: params.projectName,
+        receiverRefType: params.receiverRefType ?? 'EMAIL',
+        receiverRefIdx: this.getReceiverRefIdx(params, index),
+        receiverContact: to,
+        channel,
+        status: NotificationDeliveryStatus.PENDING,
+        metadata: params.metadata ?? null,
+      }));
     }
 
-    private createDeliveryLogParams(
-        notificationLogIdx: number,
-        params: SendNotificationParams,
-    ) {
-        const deliveryLogs: {
-            notificationLogIdx: number;
-            channel: NotificationChannel;
-            receiver: string;
-            status: NotificationDeliveryStatus;
-        }[] = [];
-
-        if (params.channels.includes(NotificationChannel.EMAIL) && params.email) {
-            for (const to of params.email.to) {
-                deliveryLogs.push({
-                    notificationLogIdx,
-                    channel: NotificationChannel.EMAIL,
-                    receiver: to,
-                    status: NotificationDeliveryStatus.PENDING,
-                });
-            }
-        }
-
-        if (params.channels.includes(NotificationChannel.SMS) && params.sms) {
-            for (const to of params.sms.to) {
-                deliveryLogs.push({
-                    notificationLogIdx,
-                    channel: NotificationChannel.SMS,
-                    receiver: to,
-                    status: NotificationDeliveryStatus.PENDING,
-                });
-            }
-        }
-
-        if (params.channels.includes(NotificationChannel.PUSH) && params.push) {
-            for (const deviceToken of params.push.deviceTokens) {
-                deliveryLogs.push({
-                    notificationLogIdx,
-                    channel: NotificationChannel.PUSH,
-                    receiver: deviceToken,
-                    status: NotificationDeliveryStatus.PENDING,
-                });
-            }
-        }
-
-        return deliveryLogs;
+    if (channel === NotificationChannel.SMS) {
+      return (params.sms?.to ?? []).map((to, index) => ({
+        notificationLogIdx: notificationLog.idx,
+        notificationLogCreatedAt: notificationLog.createdAt,
+        projectName: params.projectName,
+        receiverRefType: params.receiverRefType ?? 'PHONE',
+        receiverRefIdx: this.getReceiverRefIdx(params, index),
+        receiverContact: to,
+        channel,
+        status: NotificationDeliveryStatus.PENDING,
+        metadata: params.metadata ?? null,
+      }));
     }
+
+    if (channel === NotificationChannel.PUSH) {
+      return (params.push?.deviceTokens ?? []).map((deviceToken, index) => ({
+        notificationLogIdx: notificationLog.idx,
+        notificationLogCreatedAt: notificationLog.createdAt,
+        projectName: params.projectName,
+        receiverRefType: params.receiverRefType ?? 'DEVICE_TOKEN',
+        receiverRefIdx: this.getReceiverRefIdx(params, index),
+        receiverContact: deviceToken,
+        channel,
+        status: NotificationDeliveryStatus.PENDING,
+        metadata: params.metadata ?? null,
+      }));
+    }
+
+    throw new BadRequestException('지원하지 않는 알림 채널입니다.');
+  }
+
+  private getTargetCount(params: ResolvedNotificationParams): number {
+    const channel = params.channels[0];
+
+    if (channel === NotificationChannel.EMAIL) {
+      return params.email?.to.length ?? 0;
+    }
+
+    if (channel === NotificationChannel.SMS) {
+      return params.sms?.to.length ?? 0;
+    }
+
+    if (channel === NotificationChannel.PUSH) {
+      return params.push?.deviceTokens.length ?? 0;
+    }
+
+    return 0;
+  }
+
+  private getReceiverRefIdx(
+    params: ResolvedNotificationParams,
+    index: number,
+  ): number | null {
+    return params.receiverRefIdxs?.[index] ?? null;
+  }
+
+  private createNotificationMetadata(
+    params: ResolvedNotificationParams,
+  ): Record<string, unknown> | null {
+    const channel = params.channels[0];
+
+    return {
+      ...(params.metadata ?? {}),
+
+      ...(channel === NotificationChannel.EMAIL
+        ? {
+            emailCc: params.email?.cc ?? [],
+            emailBcc: params.email?.bcc ?? [],
+          }
+        : {}),
+
+      ...(channel === NotificationChannel.SMS
+        ? {
+            smsFrom: params.sms?.from,
+          }
+        : {}),
+
+      ...(channel === NotificationChannel.PUSH
+        ? {
+            pushData: params.push?.data ?? {},
+          }
+        : {}),
+    };
+  }
 }
