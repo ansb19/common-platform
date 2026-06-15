@@ -1,5 +1,6 @@
 import { applyDecorators, Type } from '@nestjs/common';
 import { ApiExtraModels, ApiOkResponse, getSchemaPath } from '@nestjs/swagger';
+import { ApiResponseDto } from '../dto/api-response.dto';
 
 /**
  * Swagger 문서에서 공통 API 응답 구조를 표시하기 위한 데코레이터입니다.

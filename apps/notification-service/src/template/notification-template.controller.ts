@@ -22,20 +22,17 @@ import {
     ApiTags,
 } from '@nestjs/swagger';
 
-import { ApiMessage } from 'libs/common/decorators/api-message.decorator';
-import { ApiOkResponseData } from 'libs/common/decorators/api-response.decorator';
-import { toDto } from 'libs/common/util/transform.util';
 
-import { CreateNotificationTemplateDto } from './dto/create-notification-template.dto';
-import { NotificationTemplateIdxDto } from './dto/notification-template-idx.dto';
-import {
-    PaginatedNotificationTemplateResponse,
-    ResponseNotificationTemplateDto,
-} from './dto/response-notification-template.dto';
-import { SearchNotificationTemplateDto } from './dto/search-notification-template.dto';
-import { UpdateNotificationTemplateActiveDto } from './dto/update-notification-template-active.dto';
-import { UpdateNotificationTemplateDto } from './dto/update-notification-template.dto';
 import { NotificationTemplateService } from './notification-template.service';
+import { PaginatedNotificationTemplateResponse, ResponseNotificationTemplateDto } from './dto/response/response-notification-template.dto';
+import { ApiOkResponseData  } from 'libs/common/decorator/api-response.decorator';
+import { CreateNotificationTemplateDto } from './dto/request/create-notification-template.dto';
+import { SearchNotificationTemplateDto } from './dto/request/search-notification-template.dto';
+import { toDto } from 'libs/common/util';
+import { ApiMessage } from 'libs/common/decorator/api-message.decorator';
+import { NotificationTemplateIdxDto } from './dto/request/notification-template-idx.dto';
+import { UpdateNotificationTemplateDto } from './dto/request/update-notification-template.dto';
+import { UpdateNotificationTemplateActiveDto } from './dto/request/update-notification-template-active.dto';
 
 @ApiTags('알림 템플릿 API(Notification Template)')
 @Controller('notification-template')
